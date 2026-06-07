@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Brewer — My Orders</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<nav>
+  <span class="brand">☕ Brewer</span>
+  <div>
+    <span id="user-name" style="color:#d4a96a; font-size:0.9rem;"></span>
+    <a href="/menu.html">Menu</a>
+    <a href="#" onclick="logout()">Logout</a>
+  </div>
+</nav>
+
+<div class="container">
+  <div class="page-title">My Orders</div>
+  <div id="orders-list">Loading...</div>
+</div>
+
+<script>
+  const token = localStorage.getItem('token');
+  if (!token) window.location.href = '/index.html';
+
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  document.getElementById('user-name').textContent = `Hi, ${user.name}`;
+
+  async function loadOrders() {
+    try {
+      const res = await fetch('/api/orders', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      renderOrders(data.orders);
+    } catch (err) {
+      document.getElementById('orders-list').innerHTML = '<p>Could not load orders.</p>';
+    }
+  }
+
+  function renderOrders(orders) {
+    const list = document.getElementById('orders-list');
+
+    if (orders.length === 0) {
+      list.innerHTML = `
+        <div class="empty-state">
+          <p>No orders yet</p>
+          <a href="/menu.html" class="btn btn-secondary btn-small">Browse Menu</a>
+        </div>`;
+      return;
+    }
+
+    list.innerHTML = orders.map(order => `
+      <div class="order-card">
+        <div class="order-header">
+          <strong>Order #${order.id}</strong>
+          <span class="status-badge status-${order.status}">${order.status}</span>
+        </div>
+        <div style="font-size:0.85rem; color:#888; margin-bottom:0.8rem;">
+          ${new Date(order.created_at).toLocaleString()}
+        </div>
+        <div>
+          ${order.items.map(item => `
+            <div class="cart-item">
+              <span>${item.name} x${item.quantity}</span>
+              <span>₹${(item.price_at_time * item.quantity).toFixed(2)}</span>
+            </div>
+          `).join('')}
+        </div>
+        <div style="text-align:right; font-weight:bold; margin-top:0.8rem; color:#d4a96a;">
+          Total: ₹${order.items.reduce((sum, i) => sum + (i.price_at_time * i.quantity), 0).toFixed(2)}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function logout() {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    window.location.href = '/index.html';
+  }
+
+  loadOrders();
+</script>
+
+</body>
+</html>

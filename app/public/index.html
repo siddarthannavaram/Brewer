@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Brewer — Login</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<div class="auth-container">
+  <div class="auth-title">
+    <h1>☕ Brewer</h1>
+    <p>Sign in to your account</p>
+  </div>
+
+  <div class="card">
+    <div id="alert" style="display:none;"></div>
+
+    <div class="form-group">
+      <label for="email">Email Address</label>
+      <input type="email" id="email" placeholder="john@example.com">
+    </div>
+
+    <div class="form-group">
+      <label for="password">Password</label>
+      <input type="password" id="password" placeholder="Your password">
+    </div>
+
+    <button class="btn btn-primary" onclick="login()">Sign In</button>
+  </div>
+
+  <div class="auth-footer">
+    Don't have an account? <a href="/register.html">Register here</a>
+  </div>
+</div>
+
+<script>
+  // if already logged in go to menu
+  if (localStorage.getItem('token')) {
+    window.location.href = '/menu.html';
+  }
+
+  async function login() {
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+
+    if (!email || !password) {
+      showAlert('Email and password are required.', 'error');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        showAlert(data.error, 'error');
+        return;
+      }
+
+      // store token and user info in localStorage
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+
+      window.location.href = '/menu.html';
+
+    } catch (err) {
+      showAlert('Could not connect to server.', 'error');
+    }
+  }
+
+  function showAlert(message, type) {
+    const alert = document.getElementById('alert');
+    alert.className = `alert alert-${type}`;
+    alert.textContent = message;
+    alert.style.display = 'block';
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') login();
+  });
+</script>
+
+</body>
+</html>

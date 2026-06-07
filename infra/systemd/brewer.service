@@ -1,0 +1,22 @@
+[Unit]
+Description=Brewer Cafe Ordering API
+Documentation=https://github.com/siddarthannavaram/Brewer
+After=network.target
+
+[Service]
+Type=simple
+User=devops
+WorkingDirectory=/opt/brewer/app
+EnvironmentFile=/opt/brewer/app/.env
+ExecStart=/usr/bin/node src/index.js
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=brewer
+
+# resource limits
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

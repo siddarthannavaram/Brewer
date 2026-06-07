@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Brewer — Menu</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<nav>
+  <span class="brand">☕ Brewer</span>
+  <div>
+    <span id="user-name" style="color:#d4a96a; font-size:0.9rem;"></span>
+    <a href="/orders.html">My Orders</a>
+    <a href="#" onclick="logout()">Logout</a>
+  </div>
+</nav>
+
+<div class="container">
+  <div class="layout-two-col">
+
+    <!-- menu section -->
+    <div>
+      <div class="page-title">Our Menu</div>
+      <div class="category-tabs" id="category-tabs"></div>
+      <div class="menu-grid" id="menu-grid">
+        <p>Loading menu...</p>
+      </div>
+    </div>
+
+    <!-- cart section -->
+    <div class="cart-sidebar">
+      <h2>Your Order</h2>
+      <div id="cart-items">
+        <div class="empty-state">
+          <p>No items yet</p>
+          <p style="font-size:0.8rem;">Add items from the menu</p>
+        </div>
+      </div>
+      <hr style="margin: 1rem 0; border: none; border-top: 1px solid #eee;">
+      <div style="display:flex; justify-content:space-between; font-weight:bold; margin-bottom:1rem;">
+        <span>Total</span>
+        <span id="cart-total">₹0.00</span>
+      </div>
+      <button class="btn btn-primary" onclick="placeOrder()" id="order-btn" disabled>
+        Place Order
+      </button>
+      <div id="order-alert" style="display:none; margin-top:0.8rem;"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  const token = localStorage.getItem('token');
+  if (!token) window.location.href = '/index.html';
+
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  document.getElementById('user-name').textContent = `Hi, ${user.name}`;
+
+  let allItems = [];
+  let cart = {};
+  let activeCategory = 'All';
+
+  async function loadMenu() {
+    try {
+      const res = await fetch('/api/menu', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      allItems = data.items;
+      renderCategories();
+      renderMenu(allItems);
+    } catch (err) {
+      document.getElementById('menu-grid').innerHTML = '<p>Could not load menu.</p>';
+    }
+  }
+
+  function renderCategories() {
+    const categories = ['All', ...new Set(allItems.map(i => i.category))];
+    const tabs = document.getElementById('category-tabs');
+    tabs.innerHTML = categories.map(cat => `
+      <button class="tab ${cat === 'All' ? 'active' : ''}" onclick="filterCategory('${cat}', this)">
+        ${cat}
+      </button>
+    `).join('');
+  }
+
+  function filterCategory(category, el) {
+    activeCategory = category;
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    const filtered = category === 'All' ? allItems : allItems.filter(i => i.category === category);
+    renderMenu(filtered);
+  }
+
+  function renderMenu(items) {
+    const grid = document.getElementById('menu-grid');
+    if (items.length === 0) {
+      grid.innerHTML = '<p>No items in this category.</p>';
+      return;
+    }
+    grid.innerHTML = items.map(item => `
+      <div class="menu-item">
+        <div>
+          <div class="category-tag">${item.category}</div>
+          <h3>${item.name}</h3>
+          <p class="description">${item.description || ''}</p>
+          <div class="price">₹${parseFloat(item.price).toFixed(2)}</div>
+        </div>
+        <div class="quantity-control">
+          <button onclick="changeQty(${item.id}, -1)">−</button>
+          <span id="qty-${item.id}">${cart[item.id] ? cart[item.id].qty : 0}</span>
+          <button onclick="changeQty(${item.id}, 1)">+</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function changeQty(itemId, delta) {
+    const item = allItems.find(i => i.id === itemId);
+    if (!cart[itemId]) cart[itemId] = { item, qty: 0 };
+    cart[itemId].qty = Math.max(0, cart[itemId].qty + delta);
+    if (cart[itemId].qty === 0) delete cart[itemId];
+
+    const qtyEl = document.getElementById(`qty-${itemId}`);
+    if (qtyEl) qtyEl.textContent = cart[itemId] ? cart[itemId].qty : 0;
+
+    renderCart();
+  }
+
+  function renderCart() {
+    const cartItems = document.getElementById('cart-items');
+    const orderBtn = document.getElementById('order-btn');
+    const entries = Object.values(cart);
+
+    if (entries.length === 0) {
+      cartItems.innerHTML = `
+        <div class="empty-state">
+          <p>No items yet</p>
+          <p style="font-size:0.8rem;">Add items from the menu</p>
+        </div>`;
+      orderBtn.disabled = true;
+      document.getElementById('cart-total').textContent = '₹0.00';
+      return;
+    }
+
+    let total = 0;
+    cartItems.innerHTML = entries.map(({ item, qty }) => {
+      const subtotal = item.price * qty;
+      total += subtotal;
+      return `
+        <div class="cart-item">
+          <span>${item.name} x${qty}</span>
+          <span>₹${subtotal.toFixed(2)}</span>
+        </div>`;
+    }).join('');
+
+    document.getElementById('cart-total').textContent = `₹${total.toFixed(2)}`;
+    orderBtn.disabled = false;
+  }
+
+  async function placeOrder() {
+    const items = Object.entries(cart).map(([id, { qty }]) => ({
+      menu_item_id: parseInt(id),
+      quantity: qty
+    }));
+
+    try {
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ items })
+      });
+
+      const data = await res.json();
+      const alertEl = document.getElementById('order-alert');
+
+      if (!res.ok) {
+        alertEl.className = 'alert alert-error';
+        alertEl.textContent = data.error;
+        alertEl.style.display = 'block';
+        return;
+      }
+
+      alertEl.className = 'alert alert-success';
+      alertEl.textContent = `Order #${data.order_id} placed! Kitchen is preparing your order.`;
+      alertEl.style.display = 'block';
+
+      // clear cart
+      cart = {};
+      renderCart();
+      loadMenu();
+
+    } catch (err) {
+      document.getElementById('order-alert').className = 'alert alert-error';
+      document.getElementById('order-alert').textContent = 'Could not place order.';
+      document.getElementById('order-alert').style.display = 'block';
+    }
+  }
+
+  function logout() {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    window.location.href = '/index.html';
+  }
+
+  loadMenu();
+</script>
+
+</body>
+</html>
